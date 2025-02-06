@@ -24,8 +24,8 @@ def flash_attention(q, k, v):
 
     output = np.zeros_like(q)
     for r_idx in range(0, TR):
-        r_m = np.ones((BR, 1)) * np.finfo(np.float32).min
-        r_exp_sum = np.zeros((BR, 1))
+        previous_m = np.ones((BR, 1)) * np.finfo(np.float32).min
+        previous_exp_sum = np.zeros((BR, 1))
         _q = q[r_idx * BR : (r_idx + 1) * BR, :]
 
         for c_idx in range(0, TC):
@@ -34,26 +34,28 @@ def flash_attention(q, k, v):
 
             _p = _q @ np.transpose(_k)
             new_m = np.max(
-                np.concatenate((r_m, _p), axis=-1),
+                np.concatenate((previous_m, _p), axis=-1),
                 axis=-1,
                 keepdims=True,
             )
+
+            scaled_previous_exp_sum = previous_exp_sum * np.exp(previous_m - new_m)
 
             _p = np.exp(_p - new_m)
             new_exp_sum = np.sum(
-                np.concatenate((r_exp_sum * np.exp(r_m - new_m), _p), axis=-1),
+                np.concatenate((scaled_previous_exp_sum, _p), axis=-1),
                 axis=-1,
                 keepdims=True,
             )
 
-            scale = np.exp(r_m - new_m) / new_exp_sum * r_exp_sum
+            scale = scaled_previous_exp_sum / new_exp_sum
             output[r_idx * BR : (r_idx + 1) * BR, :] = (
                 output[r_idx * BR : (r_idx + 1) * BR, :] * scale
                 + (_p / new_exp_sum) @ _v
             )
 
-            r_m = new_m
-            r_exp_sum = new_exp_sum
+            previous_m = new_m
+            previous_exp_sum = new_exp_sum
 
     return output
 
