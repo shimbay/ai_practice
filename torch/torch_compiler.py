@@ -39,6 +39,7 @@ def custom_op(x: torch.Tensor) -> torch.Tensor:
 def _(x):
     return x
 
+
 class GridSampleConcatConv(nn.Module):
     def __init__(
         self,
@@ -52,6 +53,7 @@ class GridSampleConcatConv(nn.Module):
         super().__init__()
         total_channels = 4 * in_channels_per_input
         self.conv = nn.Conv2d(total_channels, out_channels, kernel_size, padding=(1, 1))
+        self.linear = nn.Linear(64, 64)
         self.mode = mode
         self.padding_mode = padding_mode
         self.align_corners = align_corners
@@ -73,6 +75,8 @@ class GridSampleConcatConv(nn.Module):
         x = torch.cat(sampled, dim=1)
 
         x = self.conv(x)
+
+        x = self.linear(x)
 
         x = F.interpolate(x, scale_factor=0.5, mode="bilinear")
 
@@ -102,7 +106,12 @@ onnx_model = torch.onnx.export(model, (inputs, grids), dynamo=True)
 from torch.export.exported_program import default_decompositions
 
 decompositions = default_decompositions()
-decompositions = {k: v for k, v in decompositions.items() if not "upsample" in str(k)}
+
+decompositions = {
+    k: v
+    for k, v in decompositions.items()
+    # if not "upsample" in str(k) and not "linear" in str(k)
+}
 
 
 """
