@@ -80,7 +80,8 @@ class GridSampleConcatConv(nn.Module):
 
         x = F.interpolate(x, scale_factor=0.5, mode="bilinear")
 
-        x = F.softmax(x, dim=1)
+        # x = custom_op(x)
+        x = F.softmax(x)
 
         x = torch.cos(x)
 
@@ -110,7 +111,7 @@ decompositions = default_decompositions()
 decompositions = {
     k: v
     for k, v in decompositions.items()
-    # if not "upsample" in str(k) and not "linear" in str(k)
+    if not "upsample" in str(k) and not "linear" in str(k)
 }
 
 
@@ -153,7 +154,7 @@ def toy_backend_aten_ir(gm: GraphModule, sample_inputs):
 
 torch._dynamo.reset()
 fn = torch.compile(
-    backend=toy_backend_aten_ir,
+    # backend=toy_backend_aten_ir,
     # backend="onnxrt",
     dynamic=False,
     fullgraph=True,

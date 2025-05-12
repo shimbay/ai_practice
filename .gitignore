@@ -1,2 +1,3 @@
 .vimspector.json
+*.onnx
 __pycache__
