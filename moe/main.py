@@ -1,11 +1,13 @@
-from typing import Optional, Union
 import torch
 import torch.nn.functional as F
 import math
 from dataclasses import dataclass
 from scipy.spatial.distance import cosine
+from utils.nn import MoeMLP
+from utils.nn import slice_linear_ic
+from utils.nn import slice_linear_oc
 
-import modeling_qwen3_moe as qwen3_moe
+import moe.modeling_qwen3_moe as qwen3_moe
 
 torch.manual_seed(1)
 
@@ -37,6 +39,7 @@ def expert_parallel(hidden_states: torch.Tensor, world_size: int):
     TOPK = cfg.num_experts_per_tok
     EXPERT_NUM = cfg.num_experts
     EXPERT_NUM_PER_RANK = cfg.num_experts // world_size
+    EXPERT_TILE_NUM = 4
 
     # [token_num, expert_num]
     router_logits = F.linear(hidden_states, m.gate.weight, m.gate.bias)
@@ -97,41 +100,53 @@ def expert_parallel(hidden_states: torch.Tensor, world_size: int):
             effi_token_idxs = torch.nonzero(token_idxs, as_tuple=True)[0]
             effi_token_num = len(effi_token_idxs)
 
-            expert = cur_rank_experts[expert_idx]
-            for b in range(math.ceil(effi_token_num / MOE_KERNEL_BATCH_SIZE)):
-                start = b * MOE_KERNEL_BATCH_SIZE
-                kernel_effi_token_num = min(
-                    effi_token_num - start, MOE_KERNEL_BATCH_SIZE
+            # split expert to adapt the ocm size
+            for t in range(EXPERT_TILE_NUM):
+                # compile time computation
+                expert = cur_rank_experts[expert_idx]
+                ic_slicer = slice_linear_ic(t, EXPERT_TILE_NUM)
+                oc_slicer = slice_linear_oc(t, EXPERT_TILE_NUM)
+                expert_tile = MoeMLP(
+                    gate_proj=oc_slicer(expert.gate_proj),
+                    up_proj=oc_slicer(expert.up_proj),
+                    down_proj=ic_slicer(expert.down_proj),
                 )
 
-                kernel_token_idxs = torch.full(
-                    (MOE_KERNEL_BATCH_SIZE,),
-                    fill_value=TOKEN_NUM,
-                    dtype=torch.int64,
-                )
-                kernel_token_idxs[:kernel_effi_token_num] = effi_token_idxs[
-                    start : start + kernel_effi_token_num
-                ]
+                for b in range(math.ceil(effi_token_num / MOE_KERNEL_BATCH_SIZE)):
+                    start = b * MOE_KERNEL_BATCH_SIZE
+                    kernel_effi_token_num = min(
+                        effi_token_num - start, MOE_KERNEL_BATCH_SIZE
+                    )
 
-                kernel_tokens = torch.index_select(
-                    _hidden_states,
-                    dim=0,
-                    index=kernel_token_idxs,
-                )
-                kernel_expert_weights = torch.index_select(
-                    _token_expert_weights,
-                    dim=0,
-                    index=kernel_token_idxs,
-                )[:, expert_idx].unsqueeze(dim=1)
+                    kernel_token_idxs = torch.full(
+                        (MOE_KERNEL_BATCH_SIZE,),
+                        fill_value=TOKEN_NUM,
+                        dtype=torch.int64,
+                    )
+                    kernel_token_idxs[:kernel_effi_token_num] = effi_token_idxs[
+                        start : start + kernel_effi_token_num
+                    ]
 
-                kernel_tokens = expert(kernel_tokens) * kernel_expert_weights
+                    kernel_tokens = torch.index_select(
+                        _hidden_states,
+                        dim=0,
+                        index=kernel_token_idxs,
+                    )
+                    kernel_expert_weights = torch.index_select(
+                        _token_expert_weights,
+                        dim=0,
+                        index=kernel_token_idxs,
+                    )[:, expert_idx].unsqueeze(dim=1)
 
-                _final_tokens.index_add_(0, kernel_token_idxs, kernel_tokens)
+                    kernel_tokens = expert_tile(kernel_tokens) * kernel_expert_weights
+
+                    _final_tokens.index_add_(0, kernel_token_idxs, kernel_tokens)
         all_rank_final_tokens[rank] = _final_tokens[:TOKEN_NUM]
     final_tokens = torch.sum(all_rank_final_tokens, dim=0, keepdim=False)
     return final_tokens
 
 
+# python3 -m moe.main
 output = expert_parallel(hidden_states, 2).detach()
 for i in range(output.shape[0]):
     print(f"{i}, {1-cosine(output[i], output_gt[i])}")

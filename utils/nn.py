@@ -30,10 +30,14 @@ def slice_dim_for_rank(rank: int, world_size: int):
 def slice_linear_oc(rank: int, world_size: int):
     def impl(proj: torch.nn.Linear) -> torch.nn.Linear:
         o = torch.nn.Linear(proj.in_features, proj.out_features // world_size)
-        o.weight = Parameter(slice_dim_for_rank(rank, world_size)(proj.weight, 0))
+        o.weight = torch.nn.Parameter(
+            slice_dim_for_rank(rank, world_size)(proj.weight, 0)
+        )
         o.bias = None
         if proj.bias is not None:
-            o.bias = Parameter(slice_dim_for_rank(rank, world_size)(proj.bias, 0))
+            o.bias = torch.nn.Parameter(
+                slice_dim_for_rank(rank, world_size)(proj.bias, 0)
+            )
         return o
 
     return impl
@@ -42,7 +46,9 @@ def slice_linear_oc(rank: int, world_size: int):
 def slice_linear_ic(rank: int, world_size: int):
     def impl(proj: torch.nn.Linear) -> torch.nn.Linear:
         o = torch.nn.Linear(proj.in_features // world_size, proj.out_features)
-        o.weight = Parameter(slice_dim_for_rank(rank, world_size)(proj.weight, 1))
+        o.weight = torch.nn.Parameter(
+            slice_dim_for_rank(rank, world_size)(proj.weight, 1)
+        )
         o.bias = proj.bias
         return o
 
