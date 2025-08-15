@@ -34,7 +34,7 @@ def flash_attention(q, k, v):
 
             # [BR, D] bf16 @ [D, BC] bf16 -> [BR, BC] fp32
             _p = _q @ np.transpose(_k)
-            # sum([BR, BC + 1] fp32) -> [BR] fp32
+            # max([BR, BC + 1] fp32) -> [BR] fp32
             new_m = np.max(
                 np.concatenate((previous_m, _p), axis=-1),
                 axis=-1,
