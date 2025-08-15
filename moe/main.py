@@ -96,8 +96,11 @@ def expert_parallel(hidden_states: torch.Tensor, world_size: int):
         _final_tokens = torch.zeros_like(_hidden_states, dtype=_hidden_states.dtype)
 
         for expert_idx in range(EXPERT_NUM_PER_RANK):
+                    # token
+            # expert [0, 1, 0, 1]
             token_idxs = _expert_token_map[expert_idx]
             effi_token_idxs = torch.nonzero(token_idxs, as_tuple=True)[0]
+            # index # len
             effi_token_num = len(effi_token_idxs)
 
             # split expert to adapt the ocm size
@@ -127,11 +130,13 @@ def expert_parallel(hidden_states: torch.Tensor, world_size: int):
                         start : start + kernel_effi_token_num
                     ]
 
+                    # gather
                     kernel_tokens = torch.index_select(
                         _hidden_states,
                         dim=0,
                         index=kernel_token_idxs,
                     )
+                    # gather
                     kernel_expert_weights = torch.index_select(
                         _token_expert_weights,
                         dim=0,
@@ -140,6 +145,7 @@ def expert_parallel(hidden_states: torch.Tensor, world_size: int):
 
                     kernel_tokens = expert_tile(kernel_tokens) * kernel_expert_weights
 
+                    # scatter add
                     _final_tokens.index_add_(0, kernel_token_idxs, kernel_tokens)
         all_rank_final_tokens[rank] = _final_tokens[:TOKEN_NUM]
     final_tokens = torch.sum(all_rank_final_tokens, dim=0, keepdim=False)

@@ -32,30 +32,41 @@ def flash_attention(q, k, v):
             _k = k[c_idx * BC : (c_idx + 1) * BC, :]
             _v = v[c_idx * BC : (c_idx + 1) * BC, :]
 
+            # [BR, D] bf16 @ [D, BC] bf16 -> [BR, BC] fp32
             _p = _q @ np.transpose(_k)
+            # sum([BR, BC + 1] fp32) -> [BR] fp32
             new_m = np.max(
                 np.concatenate((previous_m, _p), axis=-1),
                 axis=-1,
                 keepdims=True,
             )
 
-            scaled_previous_exp_sum = previous_exp_sum * np.exp(previous_m - new_m)
+            # [BR] fp32 - [BR] fp32 -> [BR] fp32
+            # exp([BR] fp32) -> [BR] fp32
+            scale = np.exp(previous_m - new_m)
+            # [BR] fp32 * [BR] fp32 -> [BR] fp32
+            scaled_previous_exp_sum = previous_exp_sum * scale
 
+            # [BR, BC] fp32 - [BR] fp32 -> [BR, BC] fp32
+            # exp([BR, BC] fp32) -> [BR, BC] fp32
             _p = np.exp(_p - new_m)
+            # sum([BR, BC + 1]) fp32 -> [BR] fp32
             new_exp_sum = np.sum(
                 np.concatenate((scaled_previous_exp_sum, _p), axis=-1),
                 axis=-1,
                 keepdims=True,
             )
 
-            scale = scaled_previous_exp_sum / new_exp_sum
-            output[r_idx * BR : (r_idx + 1) * BR, :] = (
-                output[r_idx * BR : (r_idx + 1) * BR, :] * scale
-                + (_p / new_exp_sum) @ _v
-            )
+            # [BR, D] * [BR] fp32 -> [BR, D] fp32
+            output[r_idx * BR : (r_idx + 1) * BR, :] *= scale
+            # [BR, BC] bf16 @ [BC, D] bf16 -> [BR, D] fp32
+            # [BR, D] + [BR, D] fp32 -> [BR, D] fp32
+            output[r_idx * BR : (r_idx + 1) * BR, :] += _p @ _v
 
             previous_m = new_m
             previous_exp_sum = new_exp_sum
+
+        output[r_idx * BR : (r_idx + 1) * BR, :] /= previous_exp_sum
 
     return output
 
