@@ -1,3 +1,6 @@
 .vimspector.json
 *.onnx
 __pycache__
+build
+*egg-info
+_C.so

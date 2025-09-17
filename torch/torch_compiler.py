@@ -143,9 +143,11 @@ def toy_backend_aten_ir(gm: GraphModule, sample_inputs):
     def my_compiler(gm: GraphModule, sample_inputs):
         print("AOTAutograd produced a fx Graph in Aten IR:")
         gm.print_readable()
+        print(f"meta2: {gm.meta}")
         return gm.forward
 
     gm.print_readable()
+    print(f"meta: {gm.meta}")
     # Invoke AOTAutograd
     return aot_autograd(
         fw_compiler=my_compiler,
@@ -155,7 +157,7 @@ def toy_backend_aten_ir(gm: GraphModule, sample_inputs):
 
 torch._dynamo.reset()
 fn = torch.compile(
-    # backend=toy_backend_aten_ir,
+    backend=toy_backend_aten_ir,
     # backend="onnxrt",
     dynamic=False,
     fullgraph=True,
