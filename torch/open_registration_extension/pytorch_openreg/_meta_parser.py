@@ -3,12 +3,14 @@ import pprint
 import torch
 from torch.utils._pytree import tree_map, tree_map_only
 
+from .common import AXERA_BACKEND
 
-class OpenRegTensorMeta:
+
+class AxeraTensorMeta:
     def __init__(self, tensor, checked=True):
-        if checked and not tensor.device.type == "openreg":
+        if checked and not tensor.device.type == AXERA_BACKEND:
             raise RuntimeError(
-                "Creating OpenRegTensorMeta is only for Tensors on openreg device"
+                "Creating AxeraTensorMeta is only for Tensors on axera device"
             )
         self.data_ptr = tensor.untyped_storage().data_ptr()
         self.size = tensor.size()
@@ -19,26 +21,26 @@ class OpenRegTensorMeta:
 
     def __repr__(self):
         return (
-            f"OpenRegTensorMeta({self.data_ptr=}, {self.size=}, {self.stride=}, "
+            f"AxeraTensorMeta({self.data_ptr=}, {self.size=}, {self.stride=}, "
             f"{self.storage_offset=}, {self.dtype=}, {self.nelem_in_bytes=})"
         )
 
 
-class OpenRegTensorData(torch.Tensor):
+class AxeraTensorData(torch.Tensor):
     @staticmethod
     def from_meta(allocator, tensor_meta):
-        return OpenRegTensorData(allocator.tensor_from_meta(tensor_meta))
+        return AxeraTensorData(allocator.tensor_from_meta(tensor_meta))
 
 
 VALID_QUEUE_TYPES_IN = {torch.Tensor, int, float}
 
-VALID_QUEUE_TYPES_OUT = {OpenRegTensorMeta, int, float, str}
+VALID_QUEUE_TYPES_OUT = {AxeraTensorMeta, int, float, str}
 
 
 def safe_str(args):
     def convert(obj):
         if isinstance(obj, torch.Tensor):
-            return str(OpenRegTensorMeta(obj, checked=False))
+            return str(AxeraTensorMeta(obj, checked=False))
         else:
             return obj
 
@@ -51,7 +53,7 @@ def validate_send_queue_args(cmd, args):
         if type(obj) not in VALID_QUEUE_TYPES_OUT:
             if (
                 cmd == "recv_data"
-                and type(obj) in [torch.Tensor, OpenRegTensorData]
+                and type(obj) in [torch.Tensor, AxeraTensorData]
                 and obj.device.type == "cpu"
             ):
                 # Only HtoD copy command can send cpu Tensors over
@@ -67,11 +69,11 @@ def prepare_for_sending(args, kwargs):
     def convert(obj):
         if type(obj) not in VALID_QUEUE_TYPES_IN:
             raise RuntimeError(
-                f"Cannot send object of type {type(obj)} over openreg device pipe."
+                f"Cannot send object of type {type(obj)} over axera device pipe."
             )
 
         if isinstance(obj, torch.Tensor):
-            return OpenRegTensorMeta(obj)
+            return AxeraTensorMeta(obj)
         else:
             return obj
 
@@ -82,10 +84,10 @@ def receive_after_sending(allocator, args, kwargs):
     def convert(obj):
         if type(obj) not in VALID_QUEUE_TYPES_OUT:
             raise RuntimeError(
-                f"Received invalid object of type {type(obj)} over openreg device pipe."
+                f"Received invalid object of type {type(obj)} over axera device pipe."
             )
 
-        if isinstance(obj, OpenRegTensorMeta):
+        if isinstance(obj, AxeraTensorMeta):
             return allocator.tensor_from_meta(obj)
         else:
             return obj

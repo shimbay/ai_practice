@@ -3,6 +3,8 @@ import logging
 import torch
 from torch.utils._pytree import tree_any
 
+from .common import AXERA_BACKEND
+
 
 log = logging.getLogger(__name__)
 
@@ -28,7 +30,7 @@ def impl_factory(name):
 def _openreg_kernel_fallback(op, *args, **kwargs):
     def get_tensor_device(*args):
         for arg in args:
-            if isinstance(arg, torch.Tensor) and arg.device.type == "openreg":
+            if isinstance(arg, torch.Tensor) and arg.device.type == AXERA_BACKEND:
                 return arg.device
 
     device = get_tensor_device(*args)
@@ -36,8 +38,7 @@ def _openreg_kernel_fallback(op, *args, **kwargs):
         return _kernel_fallback(op, *args, **kwargs)
 
     # Mimicks the DeviceGuard system we have in aten
-    with torch.openreg.device(device):  # type: ignore[misc]
-        return _kernel_fallback(op, *args, **kwargs)
+    return _kernel_fallback(op, *args, **kwargs)
 
 
 def _kernel_fallback(op, *args, **kwargs):
@@ -97,7 +98,7 @@ def _kernel_fallback(op, *args, **kwargs):
             meta_res = op(*meta_args, **meta_kwargs)
 
             # 2. Allocate the output
-            real_res, _ = to_device_no_copy("openreg", meta_res, {})
+            real_res, _ = to_device_no_copy(AXERA_BACKEND, meta_res, {})
         else:
             # Slow version for data-dependent functions:
             # Run the op on the device just to get the output shape
@@ -128,31 +129,29 @@ def _kernel_fallback(op, *args, **kwargs):
 
 
 def copy_from_device(from_):
-    with torch.openreg.device(from_.device):  # type: ignore[misc]
-        args, _ = prepare_for_sending((from_,), {})
-        return driver.exec("send_data", *args)
+    args, _ = prepare_for_sending((from_,), {})
+    return driver.exec("send_data", *args)
 
 
 def copy_from_host_to_device(from_, to_):
-    with torch.openreg.device(to_.device):  # type: ignore[misc]
-        args, _ = prepare_for_sending((to_,), {})
-        driver.exec("recv_data", from_, *args)
+    args, _ = prepare_for_sending((to_,), {})
+    driver.exec("recv_data", from_, *args)
     return to_
 
 
 def _copy_from(from_, to_):
     if from_.device.type == to_.device.type:
-        assert from_.device.type == "openreg"
+        assert from_.device.type == AXERA_BACKEND
         if from_.device.index == to_.device.index:
             op = torch.ops.aten.copy_.default
             return _openreg_kernel_fallback(op, to_, from_)
         else:
             host_mem = copy_from_device(from_)
             return copy_from_host_to_device(host_mem, to_)
-    elif from_.device.type == "openreg":
+    elif from_.device.type == AXERA_BACKEND:
         host_mem = copy_from_device(from_)
         return to_.copy_(host_mem)
-    elif to_.device.type == "openreg":
+    elif to_.device.type == AXERA_BACKEND:
         return copy_from_host_to_device(from_, to_)
     else:
         raise RuntimeError("Should not happen")
@@ -173,14 +172,14 @@ def _local_scalar_dense(ten):
     return host_mem.item()
 
 
-_openreg_lib = torch.library.Library("_", "IMPL")
-_openreg_lib.fallback(_openreg_kernel_fallback, dispatch_key="PrivateUse1")
+_axera_lib = torch.library.Library("_", "IMPL")
+_axera_lib.fallback(_openreg_kernel_fallback, dispatch_key="PrivateUse1")
 
-_openreg_lib_aten = torch.library.Library("aten", "IMPL")
-_openreg_lib_aten.impl("_copy_from", _copy_from, dispatch_key="PrivateUse1")
-_openreg_lib_aten.impl(
+_axera_lib_aten = torch.library.Library("aten", "IMPL")
+_axera_lib_aten.impl("_copy_from", _copy_from, dispatch_key="PrivateUse1")
+_axera_lib_aten.impl(
     "set_.source_Tensor", _set_source_tensor, dispatch_key="PrivateUse1"
 )
-_openreg_lib_aten.impl(
+_axera_lib_aten.impl(
     "_local_scalar_dense", _local_scalar_dense, dispatch_key="PrivateUse1"
 )

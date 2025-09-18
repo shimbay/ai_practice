@@ -6,7 +6,7 @@ import time
 import torch
 
 from ._meta_parser import (
-    OpenRegTensorData,
+    AxeraTensorData,
     receive_after_sending,
     safe_str,
     validate_send_queue_args,
@@ -327,11 +327,11 @@ class _Executor:
     @register(registry)
     def send_data(self, *args):
         assert len(args) == 1
-        return OpenRegTensorData.from_meta(self.allocator, args[0])
+        return AxeraTensorData.from_meta(self.allocator, args[0])
 
     @register(registry)
     def recv_data(self, host_tensor, dev_mem):
-        dev_tensor = OpenRegTensorData.from_meta(self.allocator, dev_mem)
+        dev_tensor = AxeraTensorData.from_meta(self.allocator, dev_mem)
         dev_tensor.copy_(host_tensor)
 
     @register(registry)

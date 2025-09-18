@@ -4,7 +4,7 @@ import warnings
 
 import pytorch_openreg
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 
@@ -26,6 +26,9 @@ def main():
 
     x = torch.empty(3, 3, device="axera")
     print(f"c: {x.device}")
+
+    x = x.to("cpu")
+    print(f"d: {x.device}")
 
 
 if __name__ == "__main__":

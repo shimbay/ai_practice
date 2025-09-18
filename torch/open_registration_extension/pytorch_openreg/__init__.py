@@ -2,6 +2,8 @@ import types
 
 import torch
 
+from .common import AXERA_BACKEND
+
 # Create our python implementation dict so that the C++ module
 # can access it during its initialization and also register aten impls.
 from ._aten_impl import impl_factory as impl_factory  # noqa: F401
@@ -36,6 +38,6 @@ def _create_module():
 
 
 # Set all the appropriate state on PyTorch
-torch.utils.rename_privateuse1_backend("axera")
-torch._register_device_module("axera", _create_module())
+torch.utils.rename_privateuse1_backend(AXERA_BACKEND)
+torch._register_device_module(AXERA_BACKEND, _create_module())
 torch.utils.generate_methods_for_privateuse1_backend(for_storage=True)
