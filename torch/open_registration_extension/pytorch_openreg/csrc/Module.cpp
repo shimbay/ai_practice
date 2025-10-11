@@ -37,11 +37,11 @@ static PyMethodDef methods[] = {
     {nullptr, nullptr, 0, nullptr}
 };
 
-static struct PyModuleDef openreg_C_module =
+static struct PyModuleDef torchreg_C_module =
     {PyModuleDef_HEAD_INIT, "pytorch_openreg._C", nullptr, -1, methods};
 
 PyMODINIT_FUNC PyInit__C(void) {
-  PyObject* mod = PyModule_Create(&openreg_C_module);
+  PyObject* mod = PyModule_Create(&torchreg_C_module);
 
   py::object openreg_mod = py::module_::import("pytorch_openreg");
   // Only borrowed from the python side!
