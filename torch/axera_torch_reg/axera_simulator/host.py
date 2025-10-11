@@ -103,7 +103,8 @@ class HostDaemon(TorchBackendPythonInterface):
         self,
         device: device_id_t,
     ):
-        self.cur_device = device if device != -1 else DEFAULT_DEVICE
+        if device >= 0:
+            self.cur_device = device
 
     @override
     def uncheckedSetDevice(
@@ -208,7 +209,8 @@ class HostDaemon(TorchBackendPythonInterface):
         stream: stream_id_t,
         device: device_id_t,
     ) -> bool:
-        _device = self.devices[device if device != -1 else self.cur_device]
+        assert device >= 0
+        _device = self.devices[device]
 
         return _device.daemon.query_stream(stream)
 
@@ -245,7 +247,8 @@ class HostDaemon(TorchBackendPythonInterface):
         stream: stream_id_t,
         device: device_id_t,
     ) -> stream_id_t:
-        _device = self.devices[device if device != -1 else self.cur_device]
+        assert device >= 0
+        _device = self.devices[device]
         cur_stream = _device.cur_stream
         _device.cur_stream = stream
         return stream_id_t(cur_stream)
@@ -256,7 +259,8 @@ class HostDaemon(TorchBackendPythonInterface):
         stream: stream_id_t,
         device: device_id_t,
     ):
-        _device = self.devices[device if device != -1 else self.cur_device]
+        assert device >= 0
+        _device = self.devices[device]
 
         def _():
             pass
@@ -268,7 +272,8 @@ class HostDaemon(TorchBackendPythonInterface):
         self,
         device: device_id_t,
     ):
-        _device = self.devices[device if device != -1 else self.cur_device]
+        assert device >= 0
+        _device = self.devices[device]
 
         def _():
             pass
@@ -288,10 +293,11 @@ class HostDaemon(TorchBackendPythonInterface):
         device: device_id_t,
         flags: event_flag_t,
     ):
+        assert device >= 0
+
         import ctypes
 
-        device_index = device if device != -1 else self.cur_device
-        _device = self.devices[device_index]
+        _device = self.devices[device]
         event_ptr = ctypes.cast(event, ctypes.POINTER(ctypes.c_int64))
 
         if event_ptr.contents.value == 0:
@@ -356,8 +362,9 @@ class HostDaemon(TorchBackendPythonInterface):
         stream: stream_id_t,
         device: device_id_t,
     ):
+        assert device >= 0
         e = self.events[event]
-        _device = self.devices[device if device != -1 else self.cur_device]
+        _device = self.devices[device]
         if e.time != 0:
             return
 

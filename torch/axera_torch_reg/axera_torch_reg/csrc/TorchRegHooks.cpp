@@ -174,7 +174,11 @@ struct TorchRegGuardImpl final : public c10::impl::DeviceGuardImplInterface {
    */
   c10::Stream getStream(c10::Device d) const noexcept override {
     py::gil_scoped_acquire acquire;
+    if (d.index() == -1) {
+      d = getDevice();
+    }
     auto stream_id = get_method("getStream")(d.index()).cast<c10::StreamId>();
+    printf("%d\n", d.index());
     return c10::Stream(c10::Stream::UNSAFE, d, stream_id);
   }
 
@@ -183,6 +187,9 @@ struct TorchRegGuardImpl final : public c10::impl::DeviceGuardImplInterface {
    */
   c10::Stream getDefaultStream(c10::Device d) const override {
     py::gil_scoped_acquire acquire;
+    if (d.index() == -1) {
+      d = getDevice();
+    }
     return get_method("getDefaultStream")(d.index()).cast<c10::Stream>();
   }
 
@@ -193,6 +200,9 @@ struct TorchRegGuardImpl final : public c10::impl::DeviceGuardImplInterface {
   getStreamFromGlobalPool(c10::Device d,
                           bool isHighPriority = false) const override {
     py::gil_scoped_acquire acquire;
+    if (d.index() == -1) {
+      d = getDevice();
+    }
     return get_method("getStreamFromGlobalPool")(d.index(), isHighPriority)
         .cast<c10::Stream>();
   }
@@ -204,6 +214,9 @@ struct TorchRegGuardImpl final : public c10::impl::DeviceGuardImplInterface {
    */
   c10::Stream getNewStream(c10::Device d, int priority = 0) const override {
     py::gil_scoped_acquire acquire;
+    if (d.index() == -1) {
+      d = getDevice();
+    }
     auto stream_id =
         get_method("getNewStream")(d.index(), priority).cast<c10::StreamId>();
     return c10::Stream(c10::Stream::UNSAFE, d, stream_id);
@@ -241,7 +254,7 @@ struct TorchRegGuardImpl final : public c10::impl::DeviceGuardImplInterface {
               const c10::DeviceIndex device_index,
               const c10::EventFlag flag) const override {
     py::gil_scoped_acquire acquire;
-    get_method("record")((int64_t)event, stream.id(), device_index,
+    get_method("record")((int64_t)event, stream.id(), stream.device_index(),
                          (int64_t)flag);
   }
 
