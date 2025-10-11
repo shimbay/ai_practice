@@ -8,8 +8,6 @@ import axera_simulator
 import axera_torch_reg
 from axera_simulator.common import axera_runtime as rt
 
-logging.getLogger("axera_torch_reg").setLevel(logging.DEBUG)
-
 
 def test_device_tensor():
     logger.warning(f"host to device 0 memcpy")
