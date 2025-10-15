@@ -198,8 +198,9 @@ class HostDaemon(TorchBackendPythonInterface):
         priority: int,
     ) -> stream_id_t:
         assert priority in PRIORITY_RANGE
+        assert device >= 0
 
-        _device = self.devices[device if device != -1 else self.cur_device]
+        _device = self.devices[device]
         _device.stream_pool_counter[priority] += 1
         return stream_id_t(_device.stream_pool_counter[priority] % STREAM_POOL_SIZE)
 
@@ -209,7 +210,6 @@ class HostDaemon(TorchBackendPythonInterface):
         stream: stream_id_t,
         device: device_id_t,
     ) -> bool:
-        assert device >= 0
         _device = self.devices[device]
 
         return _device.daemon.query_stream(stream)
@@ -247,7 +247,6 @@ class HostDaemon(TorchBackendPythonInterface):
         stream: stream_id_t,
         device: device_id_t,
     ) -> stream_id_t:
-        assert device >= 0
         _device = self.devices[device]
         cur_stream = _device.cur_stream
         _device.cur_stream = stream
@@ -259,7 +258,6 @@ class HostDaemon(TorchBackendPythonInterface):
         stream: stream_id_t,
         device: device_id_t,
     ):
-        assert device >= 0
         _device = self.devices[device]
 
         def _():
@@ -272,7 +270,6 @@ class HostDaemon(TorchBackendPythonInterface):
         self,
         device: device_id_t,
     ):
-        assert device >= 0
         _device = self.devices[device]
 
         def _():
@@ -293,7 +290,6 @@ class HostDaemon(TorchBackendPythonInterface):
         device: device_id_t,
         flags: event_flag_t,
     ):
-        assert device >= 0
 
         import ctypes
 
@@ -362,7 +358,6 @@ class HostDaemon(TorchBackendPythonInterface):
         stream: stream_id_t,
         device: device_id_t,
     ):
-        assert device >= 0
         e = self.events[event]
         _device = self.devices[device]
         if e.time != 0:
